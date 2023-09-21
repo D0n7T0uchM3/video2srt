@@ -1,0 +1,6 @@
+.env
+.yml
+app.log
+*.session
+*.session-journal
+temp/

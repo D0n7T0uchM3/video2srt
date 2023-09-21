@@ -3,7 +3,6 @@ import whisper
 import yt_dlp
 from datetime import timedelta
 import numpy as np
-import csv
 import logging
 import configparser
 from pathlib import Path
@@ -23,7 +22,6 @@ config.read("config.ini")
 
 language = config.get("Whisper", "language")
 verbose = config.get("Whisper", "verbose")
-output_format = config.get("Whisper", "output_format")
 task = config.get("Whisper", "task")
 temperature_conf = float(config.get("Whisper", "temperature"))
 temperature_increment_on_fallback_conf = float(config.get("Whisper", "temperature_increment_on_fallback"))
@@ -38,59 +36,34 @@ fp16 = bool(config.get("Whisper", "fp16"))
 compression_ratio_threshold = float(config.get("Whisper", "compression_ratio_threshold"))
 logprob_threshold = float(config.get("Whisper", "logprob_threshold"))
 no_speech_threshold = float(config.get("Whisper", "no_speech_threshold"))
-drive_whisper_path = config.get("Whisper", "drive_whisper_path")
 Model = config.get("Whisper", "model")
-download_path = config.get("Whisper", "download_path")
+drive_whisper_path = config.get("Main", "drive_whisper_path")
+download_path = config.get("Main", "download_path")
 
-csv_file = "videos.csv"
-output_directory = "output"
-
-def read_from_csv():
-    with open(csv_file, "r", newline="", encoding="utf-8") as file:
-        reader = csv.reader(file)
-        headers = next(reader)
-
-        id_column_index = headers.index("ID")
-
-        video_url_list = []
-
-        for row in reader:
-            video_id = row[id_column_index]
-
-            url = f"https://youtu.be/{video_id}"
-
-            video_url_list.append(url)
-
-    return video_url_list
+output_directory = config.get("Main", "output_directory")
 
 def download_wav_file(video_url_list):
     video_path_local_list = []
-
     for url in video_url_list:
-        video_path = os.path.join(download_path, f"{url.split('/')[-1].replace('.', '')}.wav")
-        if not os.path.exists(video_path):
 
-            ydl_opts = {
-                'format': 'm4a/bestaudio/best',
-                'outtmpl': download_path + '%(id)s.%(ext)s',
-                'postprocessors': [{  # Extract audio using ffmpeg
-                    'key': 'FFmpegExtractAudio',
-                    'preferredcodec': 'wav',
-                }]
-            }
+        ydl_opts = {
+            'format': 'm4a/bestaudio/best',
+            'outtmpl': download_path + '%(id)s.%(ext)s',
+            'postprocessors': [{  # Extract audio using ffmpeg
+                'key': 'FFmpegExtractAudio',
+                'preferredcodec': 'wav',
+            }]
+        }
 
-            with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-                list_video_info = [ydl.extract_info(url, download=False)]
+        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+            list_video_info = [ydl.extract_info(url, download=True)]
 
-            for video_info in list_video_info:
-                video_path_local_list.append(Path(f"{video_info['id']}.wav"))
-
-        else:
-            logging.info(f"This '{video_path}' already exists.")
+        for video_info in list_video_info:
+            video_path_local_list.append(Path(f"{video_info['id']}.wav"))
 
     return video_path_local_list
 
-def run_whisper(video_path_local):
+def run_whisper(video_name_local):
     verbose_lut = {
         'Live transcription': True,
         'Progress bar': True,
@@ -127,54 +100,38 @@ def run_whisper(video_path_local):
 
     whisper_model = whisper.load_model(Model)
 
-    video_transcription = whisper.transcribe(
-        whisper_model,
-        str(os.path.join(download_path, f"{video_path_local.split('/')[-1]}.wav")),
+    video_transcription = whisper_model.transcribe(
+        f"temp/{video_name_local}",
         temperature=temperature,
         **args,
     )
     
     return video_transcription
 
-def convert_to_srt():
-    video_url_list = read_from_csv()
-    video_path_local_list = download_wav_file(video_url_list)
-    
-    for video_path_local in video_path_local_list:
-        logging.info(f"### {video_path_local}")
+def convert_to_srt(url_list):
+    list_of_local_files = download_wav_file(url_list)
 
-        video_transcription = run_whisper(video_path_local)
+    srt_list =[]
+    
+    for file_name in list_of_local_files:
+        logging.info(f"### {file_name}")
+
+        video_transcription = run_whisper(file_name)
 
         segments = video_transcription['segments']
-    
+        srtFilename = os.path.join(output_directory, f"{str(file_name).split('.')[0]}.srt")
+
         for segment in segments:
             startTime = str(0) + str(timedelta(seconds=int(segment['start']))) + ',000'
             endTime = str(0) + str(timedelta(seconds=int(segment['end']))) + ',000'
             text = segment['text']
             segmentId = segment['id'] + 1
-            segment = f"{segmentId}\n{startTime} --> {endTime} client\n{text[1:] if text[0] is ' ' else text}\n\n"
-            srtFilename = os.path.join(output_directory, f"{video_path_local}.srt")
+            segment = f"{segmentId}\n{startTime} --> {endTime}\n{text[1:] if text[0] is ' ' else text}\n\n"
             with open(srtFilename, 'a', encoding='utf-8') as srtFile:
                 srtFile.write(segment)
-    
-        logging.info(f"**Done for {video_path_local}**")
 
-def main():
-    convert_to_srt()
+        srt_list.append(str(srtFilename))
 
-if __name__ == "__main__":
-    main()
+        logging.info(f"**Done for {file_name}**")
 
-# # Save output
-# whisper.utils.get_writer(
-#     output_format=output_format,
-#     output_dir=video_path_local.parent
-# )(
-#     video_transcription,
-#     str(video_path_local.stem),
-#     options=dict(
-#         highlight_words=False,
-#         max_line_count=None,
-#         max_line_width=None,
-#     )
-# )
+    return srt_list
