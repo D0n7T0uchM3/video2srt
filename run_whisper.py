@@ -42,6 +42,13 @@ download_path = config.get("Main", "download_path")
 
 output_directory = config.get("Main", "output_directory")
 
+def remove_temp_files(file_path):
+    try:
+        os.remove(file_path)
+        logging.info(f"{file_path} deleted!")
+    except OSError as e:
+        logging.info(f"Error while deleting {file_path}: {e}")
+
 def download_wav_file(video_url_list):
     video_path_local_list = []
     for url in video_url_list:
@@ -101,7 +108,7 @@ def run_whisper(video_name_local):
     whisper_model = whisper.load_model(Model)
 
     video_transcription = whisper_model.transcribe(
-        f"temp/{video_name_local}",
+        f"temp/wav/{video_name_local}",
         temperature=temperature,
         **args,
     )
@@ -131,6 +138,8 @@ def convert_to_srt(url_list):
                 srtFile.write(segment)
 
         srt_list.append(str(srtFilename))
+
+        remove_temp_files(os.path.join(download_path, file_name))
 
         logging.info(f"**Done for {file_name}**")
 

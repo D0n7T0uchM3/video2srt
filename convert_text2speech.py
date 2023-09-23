@@ -1,9 +1,8 @@
-import torch
-from omegaconf import OmegaConf
-import configparser
+import os
 import logging
+import torch
+import configparser
 from pydub import AudioSegment
-import io
 
 config = configparser.ConfigParser()
 config.read("config.ini")
@@ -43,7 +42,6 @@ class silero_tts():
 
         model.to(device)
 
-        # Преобразуйте аудио в формат WAV
         audio = model.save_wav(text=self.text,
                                speaker=speaker,
                                sample_rate=sample_rate,
@@ -53,13 +51,20 @@ class silero_tts():
 
         audio_segment = AudioSegment.from_wav(audio)
 
-        return audio_segment
+        return audio_segment, audio
 
 
 class combined_audio():
     def __init__(self, srt_text: str, client_id: str):
         self.srt_text = srt_text
         self.client_id = client_id
+
+    def remove_temp_files(self, file_path):
+        try:
+            os.remove(file_path)
+            logging.info(f"{file_path} deleted!")
+        except OSError as e:
+            logging.info(f"Error while deleting {file_path}: {e}")
 
     def combine_audio(self):
         text_list = self.srt_text.split("\n\n")
@@ -80,9 +85,11 @@ class combined_audio():
 
             for i, time_label in enumerate(time_labels):
                 time = self.count_ms(time_label)
-                audio_segment = silero_tts(dialogue_list[i], self.client_id).text2audio()
+                audio_segment, audio = silero_tts(dialogue_list[i], self.client_id).text2audio()
                 edited_audio = self.speed_up_wav(time_length[i], audio_segment)
                 result_audio = result_audio.overlay(edited_audio, position=time)
+
+                self.remove_temp_files(audio)
 
             result_audio.export(f"temp/wav/{self.client_id}.wav", format="wav")
 

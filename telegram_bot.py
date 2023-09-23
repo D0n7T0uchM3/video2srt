@@ -1,3 +1,5 @@
+import time
+
 from pyrogram import Client, filters
 from pyrogram.types import *
 import os
@@ -6,6 +8,7 @@ from dotenv import load_dotenv
 import validators
 
 import run_whisper
+import audio2video
 import convert_text2speech
 
 load_dotenv()
@@ -67,6 +70,13 @@ def check_srt(srt_file_name):
 
     return False
 
+def remove_temp_files(file_path):
+    try:
+        os.remove(file_path)
+        logging.info(f"{file_path} deleted!")
+    except OSError as e:
+        logging.info(f"Error while deleting {file_path}: {e}")
+
 @bot.on_message(filters.command(["start"], prefixes=["/", "!"]))
 async def start(client, message):
     PhotoStart = "data/img/start.png"
@@ -77,7 +87,11 @@ async def start(client, message):
         f'Привет, друг!\n\n'
         f'Для транскрибации видео отправь мне ссылку на видео из видеохостинга YouTube, '
         f'если таких ссылок у тебя несколько - отправь их списком разделяя через перенос строки!\n\n'
-        f'Если нужно перевести текст в аудио, то отправь мне один файл с расширением и структурой ".srt"!',
+        f'Если нужно перевести текст в аудио, то отправь мне один файл с расширением и структурой ".srt"!\n\n'
+        f'Ecли же необходимо изменить аудиодорожку в видео и добавить субтитры, то отправь мне ссылку на видео из '
+        f'видеохостинга YouTube, а также в этом же сообщении прикрепи файл с расширением и '
+        f'структурой ".srt"!\nВАЖНО! Таймкод должен совпадать с длительностью видео, общая структура .srt '
+        f'файла должна оставаться неизменной.',
         reply_markup=reply_keyboard)
 
 @bot.on_message(filters.command(["help"], prefixes=["/", "!"]))
@@ -104,11 +118,15 @@ def message_from_user(client, message):
             for srt in list_srt:
                 message.reply_document(srt)
 
+        for srt in list_srt:
+            remove_temp_files(srt)
+
     except Exception:
         notworking = "data/img/error.png"
         message.reply_photo(
             photo=notworking,
-            caption=f"Сейчас не могу ответить, ведутся технические работы, попробуйте чуть позже или обратитесь в нашу тех. поддержку")
+            caption=f"Сейчас не могу ответить, ведутся технические работы, попробуйте чуть позже или "
+                    f"обратитесь в нашу тех. поддержку")
 
     K.delete()
 
@@ -116,32 +134,75 @@ def message_from_user(client, message):
 def on_document(client, message):
     file_id = message.document.file_id
     file_name = message.document.file_name
+    msgs = message.caption
 
     message.download(file_name=f"temp/srt/{file_name}")
 
-    if check_srt(file_name):
-        K = message.reply_text("Взял в работу, ваша аудиозапись будет готова через пару минут!")
+    if msgs != None:
+        url_list = msgs.split("\n")
 
-        try:
-            with open(f"temp/srt/{file_name}") as f:
-                file_data = f.read()
+        if check_link(url_list):
+            if check_srt(file_name):
+                K = message.reply_text("Взял в работу, ваше видео будет готово через пару минут!")
 
-            data_with_checked_lines = remove_trailing_empty_lines(file_data)
+                try:
+                    with open(f"temp/srt/{file_name}") as f:
+                        file_data = f.read()
 
-            result_wav_file = convert_text2speech.combined_audio(data_with_checked_lines, file_id).combine_audio()
+                    data_with_checked_lines = remove_trailing_empty_lines(file_data)
 
-            message.reply_document(result_wav_file)
+                    result_wav_file = convert_text2speech.combined_audio(data_with_checked_lines, file_id).combine_audio()
 
-        except:
-            notworking = "data/img/error.png"
-            message.reply_photo(
-                photo=notworking,
-                caption=f"Сейчас не могу ответить, ведутся технические работы, попробуйте чуть позже или обратитесь в нашу тех. поддержку")
+                    video_path = audio2video.srt2video(url_list[0], f"temp/srt/{file_name}", result_wav_file, file_id)
 
-        K.delete()
+                    message.reply_document(video_path)
+
+                except:
+                    notworking = "data/img/error.png"
+                    message.reply_photo(
+                        photo=notworking,
+                        caption=f"Сейчас не могу ответить, ведутся технические работы, попробуйте чуть позже "
+                                f"или обратитесь в нашу тех. поддержку")
+
+                K.delete()
+
+            else:
+                message.reply_text("Неверный формат файла, проверьте данные! "
+                                   "Необходимый формат - "".srt!""", quote=True)
+
+        else:
+            message.reply_text("Неверная ссылка, проверьте данные!", quote=True)
+
 
     else:
-        message.reply_text("Неверный формат файла, проверьте данные! Необходимый формат - "".srt!""", quote=True)
+        if check_srt(file_name):
+            K = message.reply_text("Взял в работу, ваша аудиозапись будет готова через пару минут!")
+
+            try:
+                with open(f"temp/srt/{file_name}") as f:
+                    file_data = f.read()
+
+                data_with_checked_lines = remove_trailing_empty_lines(file_data)
+
+                result_wav_file = convert_text2speech.combined_audio(data_with_checked_lines, file_id).combine_audio()
+
+                message.reply_document(result_wav_file)
+
+                remove_temp_files(result_wav_file)
+                remove_temp_files(f"temp/srt/{file_name}")
+
+            except:
+                notworking = "data/img/error.png"
+                message.reply_photo(
+                    photo=notworking,
+                    caption=f"Сейчас не могу ответить, ведутся технические работы, попробуйте чуть позже или "
+                            f"обратитесь в нашу тех. поддержку")
+
+            K.delete()
+
+
+        else:
+            message.reply_text("Неверный формат файла, проверьте данные! Необходимый формат - "".srt!""", quote=True)
 
 
 bot.run()
