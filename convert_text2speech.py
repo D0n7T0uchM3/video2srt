@@ -2,6 +2,9 @@ import os
 import logging
 import torch
 import configparser
+import pydub
+import numpy as np
+import pyrubberband as pyrb
 from pydub import AudioSegment
 
 config = configparser.ConfigParser()
@@ -20,7 +23,7 @@ logging.basicConfig(
 language = 'ru'
 model_id = 'v3_1_ru' # v4_ru
 sample_rate = 48000
-speaker = 'xenia'
+speaker = 'aidar'
 device = torch.device('cpu')  # gpu or cpu
 put_accent = True
 put_yo = True
@@ -108,11 +111,28 @@ class combined_audio():
 
         return total_ms
 
-    def speed_up_wav(self, desired_duration_ms, audio):
-        current_duration_ms = len(audio)
+    def speed_up_wav(self, desired_duration_ms, audiosegment):
+        tempo = len(audiosegment)
 
-        if current_duration_ms > desired_duration_ms:
-            speedup_factor = current_duration_ms / desired_duration_ms
-            audio = audio.speedup(playback_speed=speedup_factor)
+        if desired_duration_ms < tempo:
+            y = np.array(audiosegment.get_array_of_samples())
+            if audiosegment.channels == 2:
+                y = y.reshape((-1, 2))
+
+            sample_rate = audiosegment.frame_rate
+
+            tempo_ratio = tempo / desired_duration_ms
+
+            print(desired_duration_ms, tempo, tempo_ratio)
+
+            y_fast = pyrb.time_stretch(y, sample_rate, tempo_ratio)
+
+            channels = 2 if (y_fast.ndim == 2 and y_fast.shape[1] == 2) else 1
+            y = np.int16(y_fast * 2 ** 15)
+
+            audio = pydub.AudioSegment(y.tobytes(), frame_rate=sample_rate, sample_width=2, channels=channels)
+        else:
+            audio = AudioSegment.silent(duration=desired_duration_ms)
+            audio = audio.overlay(audiosegment, position=desired_duration_ms-tempo)
 
         return audio

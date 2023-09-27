@@ -2,6 +2,7 @@ import yt_dlp
 import moviepy.editor as mp
 import pysrt
 import logging
+import cv2
 
 logging.basicConfig(
     level=logging.INFO,
@@ -36,19 +37,26 @@ def add_subtitle(srt_file):
     # Создаем пустой список для хранения текстовых клипов с субтитрами
     subtitles_clips = []
 
-    for sub in subs:
-        text_clip = mp.TextClip(sub.text, fontsize=24, color='white', bg_color='black', font='Arial-Bold')
-        start_time = sub.start.hours * 3600 + sub.start.minutes * 60 + sub.start.seconds + sub.start.milliseconds / 1000
-        end_time = sub.end.hours * 3600 + sub.end.minutes * 60 + sub.end.seconds + sub.end.milliseconds / 1000
-        duration = end_time - start_time
-        text_clip = text_clip.set_start(start_time).set_duration(duration)
-        text_clip = text_clip.set_position(('center', 'bottom'))
-        subtitles_clips.append(text_clip)
+    try:
+        for sub in subs:
+            text_clip = mp.TextClip(sub.text, fontsize=24, color='white', bg_color='black', font='Arial-Bold')
+            start_time = sub.start.hours * 3600 + sub.start.minutes * 60 + sub.start.seconds + sub.start.milliseconds / 1000
+            end_time = sub.end.hours * 3600 + sub.end.minutes * 60 + sub.end.seconds + sub.end.milliseconds / 1000
+            duration = end_time - start_time
+            text_clip = text_clip.set_start(start_time).set_duration(duration)
+            text_clip = text_clip.set_position(('center', 'bottom'))
+            subtitles_clips.append(text_clip)
+
+    except Exception as e:
+        logging.info("Error: ", e)
 
     return subtitles_clips
 
 def srt2video(video_url: str, srt_file: str, audio_file: str, client_id: str):
-    video = mp.VideoFileClip(f"{download_video(video_url, client_id)}.mp4")
+    input_video_path = f"{download_video(video_url, client_id)}.mp4"
+
+
+    video = mp.VideoFileClip(input_video_path)
 
     video_with_subtitles = mp.CompositeVideoClip([video] + add_subtitle(srt_file))
 

@@ -4,3 +4,10 @@ pydub
 PyYAML
 torch
 torchaudio
+pyrogram
+python-dotenv
+validators
+openai-whisper
+yt_dlp
+moviepy
+pysrt

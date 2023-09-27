@@ -1,5 +1,3 @@
-import time
-
 from pyrogram import Client, filters
 from pyrogram.types import *
 import os
@@ -75,7 +73,7 @@ def remove_temp_files(file_path):
         os.remove(file_path)
         logging.info(f"{file_path} deleted!")
     except OSError as e:
-        logging.info(f"Error while deleting {file_path}: {e}")
+        logging.exception("Error: %s", e)
 
 @bot.on_message(filters.command(["start"], prefixes=["/", "!"]))
 async def start(client, message):
@@ -121,7 +119,9 @@ def message_from_user(client, message):
         for srt in list_srt:
             remove_temp_files(srt)
 
-    except Exception:
+    except Exception as e:
+        logging.exception("Error: %s", e)
+
         notworking = "data/img/error.png"
         message.reply_photo(
             photo=notworking,
@@ -157,7 +157,9 @@ def on_document(client, message):
 
                     message.reply_document(video_path)
 
-                except:
+                except Exception as e:
+                    logging.exception("Error: %s", e)
+
                     notworking = "data/img/error.png"
                     message.reply_photo(
                         photo=notworking,
@@ -191,7 +193,9 @@ def on_document(client, message):
                 remove_temp_files(result_wav_file)
                 remove_temp_files(f"temp/srt/{file_name}")
 
-            except:
+            except Exception as e:
+                logging.exception("Error: %s", e)
+
                 notworking = "data/img/error.png"
                 message.reply_photo(
                     photo=notworking,
@@ -199,7 +203,6 @@ def on_document(client, message):
                             f"обратитесь в нашу тех. поддержку")
 
             K.delete()
-
 
         else:
             message.reply_text("Неверный формат файла, проверьте данные! Необходимый формат - "".srt!""", quote=True)
