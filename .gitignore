@@ -1,5 +1,6 @@
 .env
 app.log
+test.py
 *.yml
 *.session
 *.session-journal

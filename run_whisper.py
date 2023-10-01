@@ -78,7 +78,7 @@ def run_whisper(video_name_local):
     }
 
     args = dict(
-        language=(None if language == "Auto detection" else language),
+        language=language,
         verbose=verbose_lut[verbose],
         task=task,
         temperature=temperature_conf,
