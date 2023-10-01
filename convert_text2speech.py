@@ -3,11 +3,12 @@ import logging
 import torch
 import configparser
 from pydub import AudioSegment
+from transliterate import translit
+from num2words import num2words
 
 config = configparser.ConfigParser()
 config.read("config.ini")
 
-# Схема логирования
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s [%(levelname)s] %(message)s",
@@ -21,7 +22,7 @@ language = 'ru'
 model_id = 'v3_1_ru' # v4_ru
 sample_rate = 48000
 speaker = 'xenia'
-device = torch.device('cpu')  # gpu or cpu
+device = torch.device('cuda:0')  # gpu or cpu
 put_accent = True
 put_yo = True
 
@@ -66,6 +67,29 @@ class combined_audio():
         except OSError as e:
             logging.info(f"Error while deleting {file_path}: {e}")
 
+    def replace_english_with_transliteration(self, text: str):
+        words = text.split()
+        result = []
+        for word in words:
+            # Если слово состоит только из английских букв, то транскрибируем его
+            if word.isalpha() and word.isascii():
+                transliterated_word = translit(word, "ru")
+                result.append(transliterated_word)
+            else:
+                result.append(word)
+        return ' '.join(result)
+
+    def replace_numbers_with_words(self, text: str):
+        words = text.split()
+        result = []
+        for word in words:
+            if word.isdigit():
+                word_as_words = num2words(int(word), lang='ru')
+                result.append(word_as_words)
+            else:
+                result.append(word)
+        return ' '.join(result)
+
     def combine_audio(self):
         text_list = self.srt_text.split("\n\n")
         dialogue_list = []
@@ -82,18 +106,27 @@ class combined_audio():
             duration = self.count_ms(text_list[-1].split("\n")[1].split(" ")[-1])
 
             result_audio = AudioSegment.silent(duration=duration)
+            try:
+                for i, time_label in enumerate(time_labels):
+                    time = self.count_ms(time_label)
+                    translited_str = self.replace_english_with_transliteration(dialogue_list[i])
+                    num_to_words = self.replace_numbers_with_words(translited_str)
+                    audio_segment, audio = silero_tts(num_to_words, self.client_id).text2audio()
+                    edited_audio = self.speed_up_wav(time_length[i], audio_segment)
+                    result_audio = result_audio.overlay(edited_audio, position=time)
 
-            for i, time_label in enumerate(time_labels):
-                time = self.count_ms(time_label)
-                audio_segment, audio = silero_tts(dialogue_list[i], self.client_id).text2audio()
-                edited_audio = self.speed_up_wav(time_length[i], audio_segment)
-                result_audio = result_audio.overlay(edited_audio, position=time)
+                    self.remove_temp_files(audio)
 
-                self.remove_temp_files(audio)
+                    progress_num = i / len(dialogue_list) * 100
+                    yield progress_num
+
+            except Exception as e:
+                error_message = f"Произошла ошибка чтения srt файла, проверьте его правильность, номер реплики с потенциальной ошибкой: {i}"
+                yield error_message
 
             result_audio.export(f"temp/wav/{self.client_id}.wav", format="wav")
 
-            return f"temp/wav/{self.client_id}.wav"
+            yield f"temp/wav/{self.client_id}.wav"
 
         else:
             logging.info("неправильная структура srt")

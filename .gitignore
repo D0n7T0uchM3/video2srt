@@ -6,3 +6,4 @@ app.log
 temp/
 .idea/
 __pycache__/
+test.py

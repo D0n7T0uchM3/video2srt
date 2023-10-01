@@ -145,6 +145,8 @@ def on_document(client, message):
             if check_srt(file_name):
                 K = message.reply_text("Взял в работу, ваше видео будет готово через пару минут!")
 
+                progress_reply_message = message.reply_text("Начало работы...")
+
                 try:
                     with open(f"temp/srt/{file_name}") as f:
                         file_data = f.read()
@@ -153,9 +155,17 @@ def on_document(client, message):
 
                     result_wav_file = convert_text2speech.combined_audio(data_with_checked_lines, file_id).combine_audio()
 
-                    video_path = audio2video.srt2video(url_list[0], f"temp/srt/{file_name}", result_wav_file, file_id)
+                    for value in result_wav_file:
+                        if isinstance(value, float):
+                            progress_text = f"Прогресс выполнения: {value:.2f}%"
+                            progress_reply_message.edit_message_text(progress_text)
 
-                    message.reply_document(video_path)
+                        elif "ошибка" in value.lower():
+                            message.reply_text(value, quote=True)
+
+                        else:
+                            video_path = audio2video.srt2video(url_list[0], f"temp/srt/{file_name}", value, file_id)
+                            message.reply_document(video_path)
 
                 except:
                     notworking = "data/img/error.png"
@@ -165,6 +175,7 @@ def on_document(client, message):
                                 f"или обратитесь в нашу тех. поддержку")
 
                 K.delete()
+                progress_reply_message.delete()
 
             else:
                 message.reply_text("Неверный формат файла, проверьте данные! "
