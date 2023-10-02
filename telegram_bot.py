@@ -126,7 +126,7 @@ def message_from_user(client, message):
         message.reply_photo(
             photo=notworking,
             caption=f"Сейчас не могу ответить, ведутся технические работы, попробуйте чуть позже или "
-                    f"обратитесь в нашу тех. поддержку")
+                    f"обратитесь в нашу тех. поддержку.")
 
     K.delete()
 
@@ -158,12 +158,14 @@ def on_document(client, message):
                     for value in result_wav_file:
                         if isinstance(value, float):
                             progress_text = f"Прогресс выполнения: {value:.2f}%"
-                            progress_reply_message.edit_message_text(progress_text)
+                            progress_reply_message.edit_text(progress_text)
 
                         elif "ошибка" in value.lower():
                             message.reply_text(value, quote=True)
 
                         else:
+                            progress_reply_message.edit_text("Видео готово. Идет процесс рендеринга. Может занять пару минут.")
+
                             video_path = audio2video.srt2video(url_list[0], f"temp/srt/{file_name}", value, file_id)
                             message.reply_document(video_path)
 
@@ -173,8 +175,9 @@ def on_document(client, message):
                     notworking = "data/img/error.png"
                     message.reply_photo(
                         photo=notworking,
-                        caption=f"Сейчас не могу ответить, ведутся технические работы, попробуйте чуть позже "
-                                f"или обратитесь в нашу тех. поддержку")
+                        caption=f"Сейчас не могу ответить, ведутся технические работы, попробуйте чуть позже или "
+                                f"обратитесь в нашу тех. поддержку. Также просьба проверить ваш .srt файл, в "
+                                f"нем возможно содержится ошибка, которая и повлияла на работу программы.")
 
                 K.delete()
                 progress_reply_message.delete()
@@ -190,6 +193,7 @@ def on_document(client, message):
     else:
         if check_srt(file_name):
             K = message.reply_text("Взял в работу, ваша аудиозапись будет готова через пару минут!")
+            progress_reply_message = message.reply_text("Начало работы...")
 
             try:
                 with open(f"temp/srt/{file_name}") as f:
@@ -199,10 +203,20 @@ def on_document(client, message):
 
                 result_wav_file = convert_text2speech.combined_audio(data_with_checked_lines, file_id).combine_audio()
 
-                message.reply_document(result_wav_file)
+                for value in result_wav_file:
+                    if isinstance(value, float):
+                        progress_text = f"Прогресс выполнения: {value:.2f}%"
+                        progress_reply_message.edit_text(progress_text)
 
-                remove_temp_files(result_wav_file)
-                remove_temp_files(f"temp/srt/{file_name}")
+                    elif "ошибка" in value.lower():
+                        message.reply_text(value, quote=True)
+
+                    else:
+                        progress_reply_message.edit_text("Аудио готово. Идет отправка.")
+                        message.reply_document(value)
+
+                        remove_temp_files(value)
+                        remove_temp_files(f"temp/srt/{file_name}")
 
             except Exception as e:
                 logging.exception("Error: %s", e)
@@ -211,9 +225,11 @@ def on_document(client, message):
                 message.reply_photo(
                     photo=notworking,
                     caption=f"Сейчас не могу ответить, ведутся технические работы, попробуйте чуть позже или "
-                            f"обратитесь в нашу тех. поддержку")
+                            f"обратитесь в нашу тех. поддержку. Также просьба проверить ваш .srt файл, в "
+                            f"нем возможно содержится ошибка, которая и повлияла на работу программы.")
 
             K.delete()
+            progress_reply_message.delete()
 
         else:
             message.reply_text("Неверный формат файла, проверьте данные! Необходимый формат - "".srt!""", quote=True)

@@ -1,4 +1,5 @@
 import os
+import re
 import logging
 import torch
 import configparser
@@ -76,7 +77,6 @@ class combined_audio():
         words = text.split()
         result = []
         for word in words:
-            # Если слово состоит только из английских букв, то транскрибируем его
             if word.isalpha() and word.isascii():
                 transliterated_word = translit(word, "ru")
                 result.append(transliterated_word)
@@ -85,15 +85,20 @@ class combined_audio():
         return ' '.join(result)
 
     def replace_numbers_with_words(self, text: str):
-        words = text.split()
+        # Используем регулярное выражение для поиска чисел в тексте
+        pattern = r'(\d+(?:[.,]\d+)?)'
+        words = re.split(pattern, text)
+
         result = []
         for word in words:
-            if word.isdigit():
-                word_as_words = num2words(int(word), lang='ru')
+            if re.match(pattern, word):
+                number = word.replace(',', '.')
+                word_as_words = num2words(int(number), lang='ru')
                 result.append(word_as_words)
             else:
                 result.append(word)
-        return ' '.join(result)
+
+        return ''.join(result)
 
     def combine_audio(self):
         text_list = self.srt_text.split("\n\n")
@@ -111,23 +116,19 @@ class combined_audio():
             duration = self.count_ms(text_list[-1].split("\n")[1].split(" ")[-1])
 
             result_audio = AudioSegment.silent(duration=duration)
-            try:
-                for i, time_label in enumerate(time_labels):
-                    time = self.count_ms(time_label)
-                    translited_str = self.replace_english_with_transliteration(dialogue_list[i])
-                    num_to_words = self.replace_numbers_with_words(translited_str)
-                    audio_segment, audio = silero_tts(num_to_words, self.client_id).text2audio()
-                    edited_audio = self.speed_up_wav(time_length[i], audio_segment)
-                    result_audio = result_audio.overlay(edited_audio, position=time)
+            for i, time_label in enumerate(time_labels):
+                time = self.count_ms(time_label)
+                translited_str = self.replace_english_with_transliteration(dialogue_list[i])
+                num_to_words = self.replace_numbers_with_words(translited_str)
+                audio_segment, audio = silero_tts(num_to_words, self.client_id).text2audio()
+                edited_audio = self.speed_up_wav(time_length[i], audio_segment)
+                result_audio = result_audio.overlay(edited_audio, position=time)
 
-                    self.remove_temp_files(audio)
+                self.remove_temp_files(audio)
 
-                    progress_num = i / len(dialogue_list) * 100
-                    yield progress_num
+                progress_num = i / len(dialogue_list) * 100
 
-            except Exception as e:
-                error_message = f"Произошла ошибка чтения srt файла, проверьте его правильность, номер реплики с потенциальной ошибкой: {i}"
-                yield error_message
+                yield progress_num
 
             result_audio.export(f"temp/wav/{self.client_id}.wav", format="wav")
 
@@ -157,8 +158,6 @@ class combined_audio():
             sample_rate = audiosegment.frame_rate
 
             tempo_ratio = tempo / desired_duration_ms
-
-            print(desired_duration_ms, tempo, tempo_ratio)
 
             y_fast = pyrb.time_stretch(y, sample_rate, tempo_ratio)
 
