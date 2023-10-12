@@ -9,9 +9,12 @@ import pyrubberband as pyrb
 from pydub import AudioSegment
 from transliterate import translit
 from num2words import num2words
+from gradio_client import Client
 
 config = configparser.ConfigParser()
 config.read("config.ini")
+
+client = Client("http://localhost:7865/")
 
 logging.basicConfig(
     level=logging.INFO,
@@ -23,19 +26,38 @@ logging.basicConfig(
 )
 
 language = 'ru'
-model_id = 'v3_1_ru' # v4_ru
+model_id = 'v3_1_ru'
 sample_rate = 48000
-speaker = 'xenia'
-device = torch.device('cuda:0')  # gpu or cpu
 speaker = 'aidar'
-device = torch.device('cpu')  # gpu or cpu
+device = torch.device('cuda:0')  # gpu or cpu
 put_accent = True
 put_yo = True
 
 class silero_tts():
     def __init__(self, text: str, client_id: str):
-        self.text = text
+        self.srt_text = text
         self.client_id = client_id
+
+    def rvc(self, file_path):
+        result = client.predict(
+            0,
+            f"/home/tyom/Desktop/projects/video2srt/{file_path}",
+            0,
+            "data/useless.pdf",
+            "rmvpe",
+            "",
+            "logs/kuplinov/added_IVF2384_Flat_nprobe_1_kuplinov_v2.index",
+            0,
+            0,
+            0,
+            0,
+            0,
+            api_name="/infer_convert"
+        )
+
+        print(result)
+
+        return result[1]
 
     def text2audio(self):
         torch.hub.download_url_to_file('https://raw.githubusercontent.com/snakers4/silero-models/master/models.yml',
@@ -49,7 +71,7 @@ class silero_tts():
 
         model.to(device)
 
-        audio = model.save_wav(text=self.text,
+        audio = model.save_wav(text=self.srt_text,
                                speaker=speaker,
                                sample_rate=sample_rate,
                                put_accent=put_accent,
@@ -61,17 +83,13 @@ class silero_tts():
         return audio_segment, audio
 
 
-class combined_audio():
-    def __init__(self, srt_text: str, client_id: str):
-        self.srt_text = srt_text
-        self.client_id = client_id
-
     def remove_temp_files(self, file_path):
         try:
             os.remove(file_path)
             logging.info(f"{file_path} deleted!")
         except OSError as e:
             logging.info(f"Error while deleting {file_path}: {e}")
+
 
     def replace_english_with_transliteration(self, text: str):
         words = text.split()
@@ -83,6 +101,7 @@ class combined_audio():
             else:
                 result.append(word)
         return ' '.join(result)
+
 
     def replace_numbers_with_words(self, text: str):
         # Используем регулярное выражение для поиска чисел в тексте
@@ -100,42 +119,6 @@ class combined_audio():
 
         return ''.join(result)
 
-    def combine_audio(self):
-        text_list = self.srt_text.split("\n\n")
-        dialogue_list = []
-        time_labels = []
-        time_length = []
-
-        for text in text_list:
-            lines = text.split("\n")
-            time_labels.append(lines[1].split(" ")[0])
-            time_length.append(self.count_ms(lines[1].split(" ")[2]) - self.count_ms(lines[1].split(" ")[0]))
-            dialogue_list.append(lines[2])
-
-        if len(dialogue_list) == len(time_labels):
-            duration = self.count_ms(text_list[-1].split("\n")[1].split(" ")[-1])
-
-            result_audio = AudioSegment.silent(duration=duration)
-            for i, time_label in enumerate(time_labels):
-                time = self.count_ms(time_label)
-                translited_str = self.replace_english_with_transliteration(dialogue_list[i])
-                num_to_words = self.replace_numbers_with_words(translited_str)
-                audio_segment, audio = silero_tts(num_to_words, self.client_id).text2audio()
-                edited_audio = self.speed_up_wav(time_length[i], audio_segment)
-                result_audio = result_audio.overlay(edited_audio, position=time)
-
-                self.remove_temp_files(audio)
-
-                progress_num = i / len(dialogue_list) * 100
-
-                yield progress_num
-
-            result_audio.export(f"temp/wav/{self.client_id}.wav", format="wav")
-
-            yield f"temp/wav/{self.client_id}.wav"
-
-        else:
-            logging.info("неправильная структура srt")
 
     def count_ms(self, time_label):
         hh, mm, ss_ms = time_label.split(":")
@@ -146,6 +129,20 @@ class combined_audio():
         total_ms = (hh * 3600 + mm * 60 + ss) * 1000 + ms
 
         return total_ms
+
+
+    def combine_audio(self):
+        translited_str = self.replace_english_with_transliteration(self.srt_text)
+        num_to_words = self.replace_numbers_with_words(translited_str)
+        audio_segment, audio = silero_tts(num_to_words, self.client_id).text2audio()
+
+        file_path = self.rvc(audio)
+
+        audio_segment = AudioSegment.from_wav(file_path)
+        audio = file_path
+
+        return audio_segment, audio
+
 
     def speed_up_wav(self, desired_duration_ms, audiosegment):
         tempo = len(audiosegment)

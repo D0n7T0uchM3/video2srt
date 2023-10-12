@@ -153,20 +153,17 @@ def on_document(client, message):
 
                     data_with_checked_lines = remove_trailing_empty_lines(file_data)
 
-                    result_wav_file = convert_text2speech.combined_audio(data_with_checked_lines, file_id).combine_audio()
+                    video_path = audio2video.srt2video(url_list[0], data_with_checked_lines, file_id)
 
-                    for value in result_wav_file:
+                    for value in video_path:
                         if isinstance(value, float):
                             progress_text = f"Прогресс выполнения: {value:.2f}%"
                             progress_reply_message.edit_text(progress_text)
 
-                        elif "ошибка" in value.lower():
-                            message.reply_text(value, quote=True)
-
                         else:
-                            progress_reply_message.edit_text("Видео готово. Идет процесс рендеринга. Может занять пару минут.")
+                            progress_reply_message.edit_text(
+                                "Видео готово. Идет процесс рендеринга. Может занять пару минут.")
 
-                            video_path = audio2video.srt2video(url_list[0], f"temp/srt/{file_name}", value, file_id)
                             message.reply_document(video_path)
 
                 except Exception as e:
@@ -189,50 +186,7 @@ def on_document(client, message):
         else:
             message.reply_text("Неверная ссылка, проверьте данные!", quote=True)
 
-
     else:
-        if check_srt(file_name):
-            K = message.reply_text("Взял в работу, ваша аудиозапись будет готова через пару минут!")
-            progress_reply_message = message.reply_text("Начало работы...")
-
-            try:
-                with open(f"temp/srt/{file_name}") as f:
-                    file_data = f.read()
-
-                data_with_checked_lines = remove_trailing_empty_lines(file_data)
-
-                result_wav_file = convert_text2speech.combined_audio(data_with_checked_lines, file_id).combine_audio()
-
-                for value in result_wav_file:
-                    if isinstance(value, float):
-                        progress_text = f"Прогресс выполнения: {value:.2f}%"
-                        progress_reply_message.edit_text(progress_text)
-
-                    elif "ошибка" in value.lower():
-                        message.reply_text(value, quote=True)
-
-                    else:
-                        progress_reply_message.edit_text("Аудио готово. Идет отправка.")
-                        message.reply_document(value)
-
-                        remove_temp_files(value)
-                        remove_temp_files(f"temp/srt/{file_name}")
-
-            except Exception as e:
-                logging.exception("Error: %s", e)
-
-                notworking = "data/img/error.png"
-                message.reply_photo(
-                    photo=notworking,
-                    caption=f"Сейчас не могу ответить, ведутся технические работы, попробуйте чуть позже или "
-                            f"обратитесь в нашу тех. поддержку. Также просьба проверить ваш .srt файл, в "
-                            f"нем возможно содержится ошибка, которая и повлияла на работу программы.")
-
-            K.delete()
-            progress_reply_message.delete()
-
-        else:
-            message.reply_text("Неверный формат файла, проверьте данные! Необходимый формат - "".srt!""", quote=True)
-
+        message.reply_text("Неверная ссылка, проверьте данные!", quote=True)
 
 bot.run()
