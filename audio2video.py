@@ -107,7 +107,9 @@ def srt2video(video_url: str, srt_file: str, client_id: str):
 
         else:
             video_file_name = f"temp/video/output_{client_id}.mp4"
+            
+            print(video_file_name)
 
-            video_with_audio.write_videofile(video_file_name)
+            value.write_videofile(video_file_name)
 
             yield video_file_name

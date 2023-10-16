@@ -10,9 +10,13 @@ from pydub import AudioSegment
 from transliterate import translit
 from num2words import num2words
 from gradio_client import Client
+from ruaccent import RUAccent
 
 config = configparser.ConfigParser()
 config.read("config.ini")
+
+accentizer = RUAccent()
+accentizer.load(omograph_model_size='big', use_dictionary=False)
 
 client = Client("http://localhost:7865/")
 
@@ -25,6 +29,9 @@ logging.basicConfig(
     ]
 )
 
+"""
+SILERO TTS VARS
+"""
 language = 'ru'
 model_id = 'v3_1_ru'
 sample_rate = 48000
@@ -33,20 +40,29 @@ device = torch.device('cuda:0')  # gpu or cpu
 put_accent = True
 put_yo = True
 
+"""
+RVC VARS
+"""
+pdf_path = "data/useless.pdf"
+rvc_method_name = "rmvpe"
+index_path = "logs/kuplinov/added_IVF2384_Flat_nprobe_1_kuplinov_v2.index"
+
 class silero_tts():
     def __init__(self, text: str, client_id: str):
         self.srt_text = text
         self.client_id = client_id
 
     def rvc(self, file_path):
+        absolute_path = f"/home/video2srt/{file_path}"
+
         result = client.predict(
             0,
-            f"/home/tyom/Desktop/projects/video2srt/{file_path}",
+            absolute_path,
             0,
-            "data/useless.pdf",
-            "rmvpe",
+            pdf_path,
+            rvc_method_name,
             "",
-            "logs/kuplinov/added_IVF2384_Flat_nprobe_1_kuplinov_v2.index",
+            index_path,
             0,
             0,
             0,
@@ -54,8 +70,6 @@ class silero_tts():
             0,
             api_name="/infer_convert"
         )
-
-        print(result)
 
         return result[1]
 
@@ -134,7 +148,9 @@ class silero_tts():
     def combine_audio(self):
         translited_str = self.replace_english_with_transliteration(self.srt_text)
         num_to_words = self.replace_numbers_with_words(translited_str)
-        audio_segment, audio = silero_tts(num_to_words, self.client_id).text2audio()
+
+        words_with_accent = accentizer.process_all(num_to_words)
+        audio_segment, audio = silero_tts(words_with_accent, self.client_id).text2audio()
 
         file_path = self.rvc(audio)
 

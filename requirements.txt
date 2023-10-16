@@ -13,3 +13,7 @@ moviepy
 pysrt
 num2words
 transliterate
+gradio_client
+torch
+torchvision
+torchaudio

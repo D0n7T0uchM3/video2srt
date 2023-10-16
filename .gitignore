@@ -2,6 +2,7 @@
 app.log
 test.py
 *.yml
+*.partial
 *.session
 *.session-journal
 temp/

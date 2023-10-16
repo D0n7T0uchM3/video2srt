@@ -7,9 +7,12 @@ import validators
 
 import run_whisper
 import audio2video
-import convert_text2speech
+import openai_api
 
 load_dotenv()
+
+if not os.path.exists("temp"):
+    os.mkdir("temp")
 
 # Схема логирования
 logging.basicConfig(
@@ -85,18 +88,20 @@ async def start(client, message):
         f'Привет, друг!\n\n'
         f'Для транскрибации видео отправь мне ссылку на видео из видеохостинга YouTube, '
         f'если таких ссылок у тебя несколько - отправь их списком разделяя через перенос строки!\n\n'
-        f'Если нужно перевести текст в аудио, то отправь мне один файл с расширением и структурой ".srt"!\n\n'
+        f'Если нужно составить тест по получившимуся .srt файлу, то просто отправь мне один файл с расширением и структурой ".srt"!\n\n'
         f'Ecли же необходимо изменить аудиодорожку в видео и добавить субтитры, то отправь мне ссылку на видео из '
         f'видеохостинга YouTube, а также в этом же сообщении прикрепи файл с расширением и '
-        f'структурой ".srt"!\nВАЖНО! Таймкод должен совпадать с длительностью видео, общая структура .srt '
-        f'файла должна оставаться неизменной.',
+        f'структурой ".srt"!',
         reply_markup=reply_keyboard)
 
 @bot.on_message(filters.command(["help"], prefixes=["/", "!"]))
 async def help(client, message):
     help_text = (f'Для транскрибации видео отправь мне ссылку на видео из видеохостинга YouTube, '
-                 f'если таких ссылок у тебя несколько - отправь их списком разделяя через перенос строки!\n\n'
-                 f'Если нужно перевести текст в аудио, то отправь мне один файл с расширением и структурой ".srt"!')
+                f'если таких ссылок у тебя несколько - отправь их списком разделяя через перенос строки!\n\n'
+                f'Если нужно составить тест по получившимуся .srt файлу, то просто отправь мне один файл с расширением и структурой ".srt"!\n\n'
+                f'Ecли же необходимо изменить аудиодорожку в видео и добавить субтитры, то отправь мне ссылку на видео из '
+                f'видеохостинга YouTube, а также в этом же сообщении прикрепи файл с расширением и '
+                f'структурой ".srt"!')
 
     await message.reply_text(help_text, quote=True)
 
@@ -104,17 +109,22 @@ async def help(client, message):
 def message_from_user(client, message):
     msgs = message.text
 
+    if not os.path.exists("temp/srt"):
+        os.mkdir("temp/srt")
+
     K = message.reply_text("Взял в работу, идёт транскрибация текста, готовый результат будет через пару минут!")
 
     try:
         list_srt = get_srt(msgs)
 
         if type(list_srt) == str:
+            # checked_srt = openai_api.text_generator(list_srt).check_srt()
             message.reply_text(list_srt, quote=True)
 
         else:
             for srt in list_srt:
-                message.reply_document(srt)
+                # checked_srt = openai_api.text_generator(list_srt).check_srt()
+                message.reply_document(srt, reply_markup=reply_keyboard)
 
         for srt in list_srt:
             remove_temp_files(srt)
@@ -125,8 +135,10 @@ def message_from_user(client, message):
         notworking = "data/img/error.png"
         message.reply_photo(
             photo=notworking,
-            caption=f"Сейчас не могу ответить, ведутся технические работы, попробуйте чуть позже или "
-                    f"обратитесь в нашу тех. поддержку.")
+            caption=f"Сейчас не могу ответить, возникла ошибка, попробуйте чуть позже или "
+                        f"обратитесь в нашу тех. поддержку. Также просьба проверить ваш .srt файл, в "
+                        f"нем возможно содержится ошибка, которая и повлияла на работу программы.\n\n"
+                        f"Ошибка:\n{e}", reply_markup=reply_keyboard)
 
     K.delete()
 
@@ -135,6 +147,12 @@ def on_document(client, message):
     file_id = message.document.file_id
     file_name = message.document.file_name
     msgs = message.caption
+
+    if not os.path.exists("temp/video"):
+        os.mkdir("temp/video")
+
+    if not os.path.exists("temp/video"):
+        os.mkdir("temp/wav")
 
     message.download(file_name=f"temp/srt/{file_name}")
 
@@ -164,7 +182,7 @@ def on_document(client, message):
                             progress_reply_message.edit_text(
                                 "Видео готово. Идет процесс рендеринга. Может занять пару минут.")
 
-                            message.reply_document(video_path)
+                            message.reply_document(value, reply_markup=reply_keyboard)
 
                 except Exception as e:
                     logging.exception("Error: %s", e)
@@ -172,21 +190,52 @@ def on_document(client, message):
                     notworking = "data/img/error.png"
                     message.reply_photo(
                         photo=notworking,
-                        caption=f"Сейчас не могу ответить, ведутся технические работы, попробуйте чуть позже или "
-                                f"обратитесь в нашу тех. поддержку. Также просьба проверить ваш .srt файл, в "
-                                f"нем возможно содержится ошибка, которая и повлияла на работу программы.")
+                        caption=f"Сейчас не могу ответить, возникла ошибка, попробуйте чуть позже или "
+                        f"обратитесь в нашу тех. поддержку. Также просьба проверить ваш .srt файл, в "
+                        f"нем возможно содержится ошибка, которая и повлияла на работу программы.\n\n"
+                        f"Ошибка:\n{e}", reply_markup=reply_keyboard)
 
                 K.delete()
                 progress_reply_message.delete()
 
             else:
                 message.reply_text("Неверный формат файла, проверьте данные! "
-                                   "Необходимый формат - "".srt!""", quote=True)
+                                   "Необходимый формат - "".srt!""", quote=True, reply_markup=reply_keyboard)
 
         else:
             message.reply_text("Неверная ссылка, проверьте данные!", quote=True)
 
     else:
-        message.reply_text("Неверная ссылка, проверьте данные!", quote=True)
+        K = message.reply_text("Взял в работу, тест будет готов через минуту!")
+        
+        try:                        
+            with open(f'temp/srt/{file_name}', 'r') as input_file:
+                filtered_text = ''
+            
+                for line in input_file:
+                    if not line.startswith("00:") and not line.strip().isdigit() and line.strip():
+                        filtered_text += line + '\n'
+                
+            filtered_text = filtered_text.replace("+","")
+            
+            test = openai_api.text_generator(filtered_text).test()
+            
+            with open(f"temp/srt/{file_id}_test.txt", "w") as f:
+                f.write(test)
+    
+            message.reply_document(f"temp/srt/{file_id}_test.txt")
+        
+        except Exception as e:
+            logging.exception("Error: %s", e)
 
+            notworking = "data/img/error.png"
+            message.reply_photo(
+                photo=notworking,
+                caption=f"Сейчас не могу ответить, возникла ошибка, попробуйте чуть позже или "
+                        f"обратитесь в нашу тех. поддержку. Также просьба проверить ваш .srt файл, в "
+                        f"нем возможно содержится ошибка, которая и повлияла на работу программы.\n\n"
+                        f"Ошибка:\n{e}", reply_markup=reply_keyboard)
+
+        K.delete()
+        
 bot.run()
