@@ -55,7 +55,6 @@ def count_ms(time_label):
 
 def speed_up_video_segment(input_video, srt_text, client_id):
     text_list = srt_text.split("\n\n")
-    start_time = 0
     dialogue_list = []
     time_labels = []
     time_length = []
@@ -88,7 +87,6 @@ def speed_up_video_segment(input_video, srt_text, client_id):
             progress_num = i / len(dialogue_list) * 100
             yield progress_num
 
-        yield 100
         edited_video = mp.concatenate_videoclips(video_segments)
         accelerated_video = edited_video.speedx(1.25)
 
