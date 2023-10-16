@@ -178,10 +178,12 @@ def on_document(client, message):
                             progress_text = f"Прогресс выполнения: {value:.2f}%"
                             progress_reply_message.edit_text(progress_text)
 
-                        else:
-                            progress_reply_message.edit_text(
-                                "Видео готово. Идет процесс рендеринга. Может занять пару минут.")
+                            if value == 100:
+                                progress_reply_message.edit_text("Видео готово. Идет процесс рендеринга. "
+                                                                 "Может занять пару минут, в зависимости от "
+                                                                 "длительности видео.")
 
+                        else:
                             message.reply_document(value, reply_markup=reply_keyboard)
 
                 except Exception as e:

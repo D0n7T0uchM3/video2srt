@@ -16,7 +16,7 @@ config = configparser.ConfigParser()
 config.read("config.ini")
 
 accentizer = RUAccent()
-accentizer.load(omograph_model_size='big', use_dictionary=False)
+accentizer.load(omograph_model_size='big', use_dictionary=True)
 
 client = Client("http://localhost:7865/")
 

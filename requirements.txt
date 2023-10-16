@@ -17,3 +17,5 @@ gradio_client
 torch
 torchvision
 torchaudio
+ruaccent
+onnxruntime

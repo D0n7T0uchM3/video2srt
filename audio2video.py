@@ -88,9 +88,11 @@ def speed_up_video_segment(input_video, srt_text, client_id):
             progress_num = i / len(dialogue_list) * 100
             yield progress_num
 
+        yield 100
         edited_video = mp.concatenate_videoclips(video_segments)
+        accelerated_video = edited_video.speedx(1.25)
 
-        yield edited_video
+        yield accelerated_video
 
     else:
         logging.info("неправильная структура srt")
@@ -107,8 +109,6 @@ def srt2video(video_url: str, srt_file: str, client_id: str):
 
         else:
             video_file_name = f"temp/video/output_{client_id}.mp4"
-            
-            print(video_file_name)
 
             value.write_videofile(video_file_name)
 
